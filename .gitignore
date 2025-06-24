@@ -1,0 +1,3 @@
+*.pyc
+/playback_audio
+/recorded_audio
