@@ -7,6 +7,12 @@ import sounddevice as sd
 import soundfile as sf
 import openai
 
+# TODO: Pretty sure I can remove sounddevice and soundfile
+
+from pydub import AudioSegment
+from pydub.playback import play as pydub_play
+
+sd.default.device = (1, 1)
 
 class AudioManager:
     def __init__(
@@ -66,24 +72,28 @@ class AudioManager:
             print(f"Deleted old clip: {to_delete}")
 
     def play_audio(self, audio: np.ndarray, samplerate: int = None):
-        """Play a numpy array of int16 audio via sounddevice."""
-        sr = samplerate or self.SAMPLE_RATE
-        sd.play(audio, sr)
-        sd.wait()
+        """Play a numpy array of int16 audio via pydub."""
+        samplerate = samplerate or self.SAMPLE_RATE
+        # Convert numpy array to AudioSegment
+        seg = AudioSegment(
+            audio.tobytes(),
+            frame_rate=samplerate,
+            sample_width=2,
+            channels=self.CHANNELS,
+        )
+        pydub_play(seg)
 
     def play_tts(self, filename: str):
-        """
-        Play a pre-rendered TTS file (wav/mp3) at the TTS sample rate.
-        """
-        data, _ = sf.read(filename, dtype="int16")
-        self.play_audio(data, self.TTS_SAMPLE_RATE)
+        """Play a pre-rendered TTS file (wav/mp3)."""
+        seg = AudioSegment.from_file(filename)
+        pydub_play(seg)
 
     def play_funky_audio(self, filename: str, samplerate: int):
-        """
-        Play any audio file at the given samplerate.
-        """
-        data, _ = sf.read(filename, dtype="int16")
-        self.play_audio(data, samplerate)
+        """Play any audio file at the given samplerate."""
+        seg = AudioSegment.from_file(filename)
+        if samplerate and seg.frame_rate != samplerate:
+            seg = seg.set_frame_rate(samplerate)
+        pydub_play(seg)
 
     def capture_audio(self) -> (np.ndarray, str):
         """
@@ -96,13 +106,13 @@ class AudioManager:
         silent_count = 0
         collected = []
 
-        print("Started Recording (Ctrl+C to stop early)…")
+        print("Started Recording (Ctrl+C to stop early)â¦")
         try:
             with sd.InputStream(samplerate=sr, channels=ch, dtype="int16") as stream:
                 while True:
                     block, overflowed = stream.read(chunk_size)
                     if overflowed:
-                        print("⚠ buffer overflow")
+                        print("â  buffer overflow")
                     if ch == 1:
                         block = block.flatten()
                     collected.append(block.copy())
@@ -145,3 +155,4 @@ class AudioManager:
         except Exception as e:
             print("Transcription error:", e)
             return None, None
+
